@@ -17,12 +17,15 @@ export default function Home() {
   const [resetMessage, setResetMessage] = useState("");
   const [resetError, setResetError] = useState("");
   
+  // Password visibility states
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  
   // Form validation states
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [usernameError, setUsernameError] = useState("");
   
-  // Use ref to track if component is mounted
   const isMounted = useRef(true);
 
   // Real-time validation functions
@@ -121,6 +124,10 @@ export default function Home() {
     setAuthError("");
   };
 
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword);
+  };
+
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setResetError("");
@@ -157,7 +164,6 @@ export default function Home() {
       setResetMessage("✅ Password reset email sent! Check your inbox (and spam folder) for the link.");
       setResetEmail("");
       
-      // Return to login after 3 seconds
       setTimeout(() => {
         setShowResetPassword(false);
         setResetMessage("");
@@ -257,7 +263,6 @@ export default function Home() {
     await supabase.auth.signOut();
   };
 
-  // Loading state
   if (loading && !session) {
     return (
       <div style={styles.loadingContainer}>
@@ -269,7 +274,6 @@ export default function Home() {
     );
   }
 
-  // Password Reset Page
   if (showResetPassword) {
     return (
       <div style={styles.container}>
@@ -348,7 +352,6 @@ export default function Home() {
     );
   }
 
-  // Login/Signup page
   if (!session) {
     return (
       <div style={styles.container}>
@@ -415,20 +418,29 @@ export default function Home() {
                 Password
                 <span style={styles.required}> *</span>
               </label>
-              <input
-                type="password"
-                value={password}
-                onChange={handlePasswordChange}
-                placeholder={isLogin ? "Enter your password" : "Create a password (min. 6 characters)"}
-                style={{
-                  ...styles.input,
-                  borderColor: passwordError ? '#ef4444' : '#e5e7eb'
-                }}
-              />
+              <div style={styles.passwordContainer}>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={handlePasswordChange}
+                  placeholder={isLogin ? "Enter your password" : "Create a password (min. 6 characters)"}
+                  style={{
+                    ...styles.input,
+                    borderColor: passwordError ? '#ef4444' : '#e5e7eb',
+                    flex: 1,
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={togglePasswordVisibility}
+                  style={styles.eyeButton}
+                >
+                  {showPassword ? "🙈" : "👁️"}
+                </button>
+              </div>
               {passwordError && <p style={styles.errorText}>{passwordError}</p>}
             </div>
 
-            {/* Forgot Password Link - Only show on login */}
             {isLogin && (
               <div style={styles.forgotPasswordContainer}>
                 <button
@@ -463,6 +475,7 @@ export default function Home() {
                   setEmailError("");
                   setPasswordError("");
                   setUsernameError("");
+                  setShowPassword(false);
                 }}
                 style={styles.toggleButton}
               >
@@ -488,7 +501,6 @@ export default function Home() {
   return <Dashboard session={session} onLogout={handleLogout} />;
 }
 
-// Styles
 const styles: { [key: string]: React.CSSProperties } = {
   loadingContainer: {
     minHeight: '100vh',
@@ -596,6 +608,24 @@ const styles: { [key: string]: React.CSSProperties } = {
     transition: 'all 0.3s ease',
     outline: 'none',
   },
+  passwordContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    position: 'relative',
+  },
+  eyeButton: {
+    position: 'absolute',
+    right: '12px',
+    background: 'transparent',
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: '1.2rem',
+    padding: '0',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   errorText: {
     fontSize: '0.7rem',
     color: '#ef4444',
@@ -687,7 +717,6 @@ const styles: { [key: string]: React.CSSProperties } = {
   },
 };
 
-// Add animations to the document
 if (typeof document !== 'undefined') {
   const style = document.createElement('style');
   style.textContent = `
