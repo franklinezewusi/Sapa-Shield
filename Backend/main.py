@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 from typing import Optional
 
 # --- GOOGLE GENAI SDK IMPORTS ---
-from google import genai
+import google.generativeai as genai
 from google.genai import types
 
 # Load environment variables
