@@ -1,770 +1,546 @@
 "use client";
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import Dashboard from './dashboard';
 
 export default function Home() {
   const [session, setSession] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [username, setUsername] = useState("");
-  const [isLogin, setIsLogin] = useState(true);
-  const [authError, setAuthError] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
-  const [showResetPassword, setShowResetPassword] = useState(false);
-  const [resetEmail, setResetEmail] = useState("");
-  const [resetMessage, setResetMessage] = useState("");
-  const [resetError, setResetError] = useState("");
-  
-  // Password visibility states
-  const [showPassword, setShowPassword] = useState(false);
-  
-  // Form validation states
-  const [emailError, setEmailError] = useState("");
-  const [passwordError, setPasswordError] = useState("");
-  const [usernameError, setUsernameError] = useState("");
-  
-  const isMounted = useRef(true);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [isSigningIn, setIsSigningIn] = useState<boolean>(false);
 
-  // Real-time validation functions
-  const validateEmail = (emailValue: string): boolean => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailValue) {
-      setEmailError("Email is required");
-      return false;
-    }
-    if (!emailRegex.test(emailValue)) {
-      setEmailError("Please enter a valid email address (e.g., name@example.com)");
-      return false;
-    }
-    setEmailError("");
-    return true;
-  };
-
-  const validatePassword = (passwordValue: string): boolean => {
-    if (!passwordValue) {
-      setPasswordError(isLogin ? "Password is required" : "Password is required");
-      return false;
-    }
-    if (!isLogin && passwordValue.length < 6) {
-      setPasswordError("Password must be at least 6 characters");
-      return false;
-    }
-    setPasswordError("");
-    return true;
-  };
-
-  const validateUsername = (usernameValue: string): boolean => {
-    if (!isLogin && !usernameValue) {
-      setUsernameError("Username is required");
-      return false;
-    }
-    if (!isLogin && usernameValue.length < 3) {
-      setUsernameError("Username must be at least 3 characters");
-      return false;
-    }
-    if (!isLogin && usernameValue.length > 20) {
-      setUsernameError("Username must be less than 20 characters");
-      return false;
-    }
-    setUsernameError("");
-    return true;
-  };
+  // Form inputs
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState<boolean>(false);
+  
+  // Custom Bottom Sheet Alert State
+  const [errorModal, setErrorModal] = useState<{ title: string; message: string } | null>(null);
+  const [authSuccess, setAuthSuccess] = useState('');
+  const [isSignUp, setIsSignUp] = useState(false);
 
   useEffect(() => {
-    isMounted.current = true;
-    
-    const getSession = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (isMounted.current) {
-          setSession(session);
-          setLoading(false);
-        }
-      } catch (error) {
-        console.error("Session error:", error);
-        if (isMounted.current) {
-          setLoading(false);
-        }
-      }
-    };
-    
-    getSession();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (isMounted.current) {
-        setSession(session);
-        setLoading(false);
-      }
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+      setIsSigningIn(false);
     });
 
-    return () => {
-      isMounted.current = false;
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setEmail(e.target.value);
-    validateEmail(e.target.value);
-    setAuthError("");
-  };
-
-  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setPassword(e.target.value);
-    validatePassword(e.target.value);
-    setAuthError("");
-  };
-
-  const handleUsernameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setUsername(e.target.value);
-    validateUsername(e.target.value);
-    setAuthError("");
-  };
-
-  const togglePasswordVisibility = () => {
-    setShowPassword(!showPassword);
-  };
-
-  const handleResetPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setResetError("");
-    setResetMessage("");
-    
-    if (!resetEmail) {
-      setResetError("Please enter your email address");
-      return;
-    }
-    
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(resetEmail)) {
-      setResetError("Please enter a valid email address");
-      return;
-    }
-    
-    setLoading(true);
-    
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
-        redirectTo: `${window.location.origin}/update-password`,
-      });
-      
-      if (error) {
-        if (error.message.includes("Email not confirmed")) {
-          setResetError("Please verify your email first. Check your inbox for verification link.");
-        } else {
-          setResetError(error.message);
-        }
-        setLoading(false);
-        return;
-      }
-      
-      setResetMessage("✅ Password reset email sent! Check your inbox (and spam folder) for the link.");
-      setResetEmail("");
-      
-      setTimeout(() => {
-        setShowResetPassword(false);
-        setResetMessage("");
-      }, 3000);
-      
-    } catch (error: any) {
-      setResetError("An error occurred. Please try again.");
-    } finally {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
       setLoading(false);
-    }
-  };
+      setIsSigningIn(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    setAuthError("");
-    setSuccessMessage("");
-    
-    const isEmailValid = validateEmail(email);
-    const isPasswordValid = validatePassword(password);
-    const isUsernameValid = !isLogin ? validateUsername(username) : true;
-    
-    if (!isEmailValid || !isPasswordValid || !isUsernameValid) {
-      return;
-    }
-    
-    setLoading(true);
+    setErrorModal(null);
+    setAuthSuccess('');
+    setIsSigningIn(true);
 
     try {
-      if (isLogin) {
-        const { data, error } = await supabase.auth.signInWithPassword({ 
-          email, 
-          password 
-        });
-        
-        if (error) {
-          if (error.message === "Invalid login credentials") {
-            setAuthError("❌ Incorrect email or password. Please try again.");
-          } else if (error.message.includes("Email not confirmed")) {
-            setAuthError("📧 Please verify your email address before logging in. Check your inbox!");
-          } else {
-            setAuthError(`❌ ${error.message}`);
-          }
-          setLoading(false);
-          return;
-        }
-        
-        console.log("Login successful:", data.user?.email);
-        
+      if (isSignUp) {
+        const { error } = await supabase.auth.signUp({ email, password });
+        if (error) throw error;
+        setAuthSuccess('Check your email for the confirmation link!');
+        setIsSigningIn(false);
       } else {
-        const { data, error } = await supabase.auth.signUp({ 
-          email, 
-          password,
-          options: {
-            data: {
-              username: username,
-              full_name: username
-            }
-          }
-        });
-        
-        if (error) {
-          if (error.message.includes("User already registered")) {
-            setAuthError("📧 An account with this email already exists. Please login instead.");
-          } else if (error.message.includes("Password should be at least 6 characters")) {
-            setAuthError("🔒 Password must be at least 6 characters long.");
-          } else {
-            setAuthError(`❌ ${error.message}`);
-          }
-          setLoading(false);
-          return;
-        }
-        
-        if (data.user) {
-          setSuccessMessage("✅ Account created successfully! Please check your email to verify your account, then login.");
-          setEmail("");
-          setPassword("");
-          setUsername("");
-          setTimeout(() => {
-            setIsLogin(true);
-            setSuccessMessage("");
-          }, 3000);
-        }
-        setLoading(false);
-        return;
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
       }
-    } catch (error: any) {
-      console.error("Auth error:", error);
-      setAuthError(`❌ An unexpected error occurred. Please try again.`);
-      setLoading(false);
+    } catch (err: any) {
+      setIsSigningIn(false);
+      setErrorModal({
+        title: isSignUp ? 'Registration Failed' : 'Login Failed',
+        message: err.message || 'Invalid credentials entered. Please verify your email and password.',
+      });
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    setErrorModal(null);
+    setAuthSuccess('');
+    if (!email) {
+      setErrorModal({
+        title: 'Email Required',
+        message: 'Please enter your email address in the field above to receive a reset link.',
+      });
       return;
     }
-    
-    setLoading(false);
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) throw error;
+      setAuthSuccess('Password reset link has been sent to your email!');
+    } catch (err: any) {
+      setErrorModal({
+        title: 'Reset Link Error',
+        message: err.message || 'Failed to send password reset email. Please try again.',
+      });
+    }
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-  };
-
-  if (loading && !session) {
+  if (loading) {
     return (
       <div style={styles.loadingContainer}>
+        <style>{`
+          @keyframes spinRing {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}</style>
         <div style={styles.loadingContent}>
-          <div style={styles.loadingIcon}>🛡️</div>
-          <p style={styles.loadingText}>Loading...</p>
+          <div style={styles.logoRingWrapper}>
+            <div style={styles.spinningRing} />
+            <img src="/SSL.jpg" alt="Sapa-Shield Logo" style={styles.centerLogoImg} />
+          </div>
+          <p style={styles.loadingText}></p>
         </div>
       </div>
     );
   }
 
-  if (showResetPassword) {
-    return (
-      <div style={styles.container}>
-        <div style={styles.authCard}>
-          <div style={styles.authHeader}>
-            <div style={styles.authLogo}>🔐</div>
-            <h1 style={styles.authTitle}>Reset Password</h1>
-            <p style={styles.authSubtitle}>We'll send you a link to reset your password</p>
+  if (session) {
+    return <Dashboard session={session} onLogout={() => setSession(null)} />;
+  }
+
+  return (
+    <div style={styles.authContainer}>
+      <div style={{ ...styles.authCard, filter: errorModal ? 'blur(4px)' : 'none', transition: 'filter 0.3s ease' }}>
+        
+        {/* Brand Header */}
+        <div style={styles.brandHeaderContainer}>
+          <div style={styles.brandRow}>
+            <img src="/SSL.jpg" alt="Sapa-Shield Logo" style={styles.loginLogo} />
+            <h1 style={styles.brandTitle}>
+              SAPA<span style={{ color: '#38bdf8' }}>-SHIELD</span>
+            </h1>
+          </div>
+          <p style={styles.brandSubtitle}>Protect your finances from Sapa</p>
+        </div>
+
+        {/* Auth Form */}
+        <form onSubmit={handleAuth} style={styles.form}>
+          {authSuccess && <div style={styles.successAlert}>{authSuccess}</div>}
+
+          <div style={styles.formGroup}>
+            <label style={styles.label}>EMAIL ADDRESS</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="student@university.edu"
+              required
+              style={styles.input}
+            />
           </div>
 
-          {resetMessage && (
-            <div style={styles.successMessage}>
-              <span>✅</span> {resetMessage}
-            </div>
-          )}
+          <div style={styles.formGroup}>
+  <div style={styles.passwordLabelRow}>
+    <label style={styles.label}>PASSWORD</label>
+    {!isSignUp && (
+      <button
+        type="button"
+        onClick={handleForgotPassword}
+        style={styles.forgotBtn}
+      >
+        Forgot password?
+      </button>
+    )}
+  </div>
 
-          {resetError && (
-            <div style={styles.errorMessage}>
-              <span>⚠️</span> {resetError}
-            </div>
-          )}
+  {/* Password Input Wrapper with Embedded Vector Eye Toggle */}
+  <div style={styles.passwordInputWrapper}>
+    <input
+      type={showPassword ? "text" : "password"}
+      value={password}
+      onChange={(e) => setPassword(e.target.value)}
+      placeholder="••••••••"
+      required={!authSuccess}
+      style={{ ...styles.input, paddingRight: '2.5rem' }}
+    />
+    <button
+      type="button"
+      onClick={() => setShowPassword(!showPassword)}
+      style={styles.eyeToggleBtn}
+      title={showPassword ? "Hide Password" : "Show Password"}
+    >
+      {showPassword ? (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+          <circle cx="12" cy="12" r="3"></circle>
+        </svg>
+      ) : (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+          <line x1="1" y1="1" x2="23" y2="23"></line>
+        </svg>
+      )}
+    </button>
+  </div>
+</div>
 
-          <form onSubmit={handleResetPassword} style={styles.form}>
-            <div style={styles.inputGroup}>
-              <label style={styles.label}>
-                Email Address
-                <span style={styles.required}> *</span>
-              </label>
-              <input
-                type="email"
-                value={resetEmail}
-                onChange={(e) => setResetEmail(e.target.value)}
-                placeholder="you@example.com"
-                style={styles.input}
-              />
-            </div>
+          <button 
+            type="submit" 
+            disabled={isSigningIn}
+            style={{ 
+              ...styles.submitBtn, 
+              opacity: isSigningIn ? 0.75 : 1,
+              cursor: isSigningIn ? 'not-allowed' : 'pointer'
+            }}
+          >
+            {isSigningIn ? 'Signing in...' : (isSignUp ? 'Create Account' : 'Sign In')}
+          </button>
+        </form>
 
-            <button 
-              type="submit" 
-              disabled={loading}
-              style={{
-                ...styles.submitButton,
-                opacity: loading ? 0.7 : 1,
-                cursor: loading ? 'not-allowed' : 'pointer'
-              }}
-            >
-              {loading ? "Sending..." : "Send Reset Link"}
-            </button>
-
-            <div style={styles.toggleContainer}>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowResetPassword(false);
-                  setResetError("");
-                  setResetMessage("");
-                }}
-                style={styles.toggleButton}
-              >
-                ← Back to Login
-              </button>
-            </div>
-          </form>
-
-          <footer style={styles.footer}>
-            <p>Secure authentication powered by Supabase</p>
-          </footer>
+        <div style={styles.toggleFooter}>
+          <button 
+            onClick={() => {
+              setIsSignUp(!isSignUp);
+              setErrorModal(null);
+              setAuthSuccess('');
+            }} 
+            style={styles.toggleBtn}
+          >
+            {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
+          </button>
         </div>
 
-        <div style={styles.backgroundDecoration}>
-          <div style={styles.sphere1}></div>
-          <div style={styles.sphere2}></div>
-          <div style={styles.sphere3}></div>
-        </div>
       </div>
-    );
-  }
 
-  if (!session) {
-    return (
-      <div style={styles.container}>
-        <div style={styles.authCard}>
-          <div style={styles.authHeader}>
-            <div style={styles.authLogo}>🛡️</div>
-            <h1 style={styles.authTitle}>SAPA-SHIELD</h1>
-            <p style={styles.authSubtitle}>Protect your finances from Sapa</p>
+      {/* Sapa-Shield Themed Bottom Sheet Alert */}
+      {errorModal && (
+        <div style={styles.modalOverlay} onClick={() => setErrorModal(null)}>
+          <style>{`
+            @keyframes slideUp {
+              from { transform: translateY(100%); opacity: 0; }
+              to { transform: translateY(0); opacity: 1; }
+            }
+          `}</style>
+          <div 
+            style={styles.modalSheet}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Sheet Handle */}
+            <div style={styles.modalHandle} />
+
+            {/* Glowing Danger Badge */}
+            <div style={styles.dangerIconBadge}>
+              <span style={{ color: '#ffffff', fontSize: '1.25rem', fontWeight: '900' }}>!</span>
+            </div>
+
+            {/* Title & Message */}
+            <h3 style={styles.modalTitle}>{errorModal.title}</h3>
+            <p style={styles.modalMessage}>{errorModal.message}</p>
+
+            {/* Sapa-Shield Gradient Close Button */}
+            <button 
+              onClick={() => setErrorModal(null)}
+              style={styles.modalCloseBtn}
+            >
+              Close
+            </button>
           </div>
-
-          {successMessage && (
-            <div style={styles.successMessage}>
-              <span>✅</span> {successMessage}
-            </div>
-          )}
-
-          {authError && (
-            <div style={styles.errorMessage}>
-              <span>⚠️</span> {authError}
-            </div>
-          )}
-
-          <form onSubmit={handleAuth} style={styles.form}>
-            {!isLogin && (
-              <div style={styles.inputGroup}>
-                <label style={styles.label}>
-                  Username
-                  <span style={styles.required}> *</span>
-                </label>
-                <input
-                  type="text"
-                  value={username}
-                  onChange={handleUsernameChange}
-                  placeholder="Choose a username"
-                  style={{
-                    ...styles.input,
-                    borderColor: usernameError ? '#ef4444' : '#e5e7eb'
-                  }}
-                />
-                {usernameError && <p style={styles.errorText}>{usernameError}</p>}
-              </div>
-            )}
-
-            <div style={styles.inputGroup}>
-              <label style={styles.label}>
-                Email
-                <span style={styles.required}> *</span>
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={handleEmailChange}
-                placeholder="you@example.com"
-                style={{
-                  ...styles.input,
-                  borderColor: emailError ? '#ef4444' : '#e5e7eb'
-                }}
-              />
-              {emailError && <p style={styles.errorText}>{emailError}</p>}
-            </div>
-
-            <div style={styles.inputGroup}>
-              <label style={styles.label}>
-                Password
-                <span style={styles.required}> *</span>
-              </label>
-              <div style={styles.passwordContainer}>
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={handlePasswordChange}
-                  placeholder={isLogin ? "Enter your password" : "Create a password (min. 6 characters)"}
-                  style={{
-                    ...styles.input,
-                    borderColor: passwordError ? '#ef4444' : '#e5e7eb',
-                    paddingRight: '45px',
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={togglePasswordVisibility}
-                  style={styles.eyeButton}
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  <svg 
-                    width="20" 
-                    height="20" 
-                    viewBox="0 0 24 24" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    strokeWidth="2" 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round"
-                    style={{ pointerEvents: 'none' }}
-                  >
-                    {showPassword ? (
-                      <>
-                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-                        <line x1="1" y1="1" x2="23" y2="23" />
-                      </>
-                    ) : (
-                      <>
-                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                        <circle cx="12" cy="12" r="3" />
-                      </>
-                    )}
-                  </svg>
-                </button>
-              </div>
-              {passwordError && <p style={styles.errorText}>{passwordError}</p>}
-            </div>
-
-            {isLogin && (
-              <div style={styles.forgotPasswordContainer}>
-                <button
-                  type="button"
-                  onClick={() => setShowResetPassword(true)}
-                  style={styles.forgotPasswordButton}
-                >
-                  Forgot Password?
-                </button>
-              </div>
-            )}
-
-            <button 
-              type="submit" 
-              disabled={loading}
-              style={{
-                ...styles.submitButton,
-                opacity: loading ? 0.7 : 1,
-                cursor: loading ? 'not-allowed' : 'pointer'
-              }}
-            >
-              {loading ? "Processing..." : (isLogin ? "LOGIN" : "SIGN UP")}
-            </button>
-
-            <div style={styles.toggleContainer}>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsLogin(!isLogin);
-                  setAuthError("");
-                  setSuccessMessage("");
-                  setEmailError("");
-                  setPasswordError("");
-                  setUsernameError("");
-                  setShowPassword(false);
-                }}
-                style={styles.toggleButton}
-              >
-                {isLogin ? "Need an account? Sign Up" : "Already have an account? Login"}
-              </button>
-            </div>
-          </form>
-
-          <footer style={styles.footer}>
-            <p>Secure authentication powered by Supabase</p>
-          </footer>
         </div>
+      )}
 
-        <div style={styles.backgroundDecoration}>
-          <div style={styles.sphere1}></div>
-          <div style={styles.sphere2}></div>
-          <div style={styles.sphere3}></div>
-        </div>
-      </div>
-    );
-  }
-
-  return <Dashboard session={session} onLogout={handleLogout} />;
+    </div>
+  );
 }
 
 const styles: { [key: string]: React.CSSProperties } = {
   loadingContainer: {
     minHeight: '100vh',
-    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    background: '#090d16',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
   },
   loadingContent: {
     textAlign: 'center',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
   },
-  loadingIcon: {
-    fontSize: '3rem',
-    marginBottom: '1rem',
-    animation: 'pulse 1s infinite',
+  logoRingWrapper: {
+    position: 'relative',
+    width: '90px',
+    height: '90px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: '1.25rem',
+  },
+  spinningRing: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    borderRadius: '50%',
+    border: '3px solid transparent',
+    borderTopColor: '#38bdf8',
+    borderRightColor: 'rgba(56, 189, 248, 0.2)',
+    borderBottomColor: '#0284c7',
+    borderLeftColor: 'rgba(56, 189, 248, 0.2)',
+    animation: 'spinRing 1.2s linear infinite',
+    boxShadow: '0 0 15px rgba(56, 189, 248, 0.3)',
+    boxSizing: 'border-box',
+  },
+  centerLogoImg: {
+    width: '52px',
+    height: '52px',
+    objectFit: 'contain',
+    borderRadius: '12px',
+    filter: 'drop-shadow(0 0 8px rgba(56, 189, 248, 0.5))',
+    zIndex: 2,
   },
   loadingText: {
-    color: 'white',
-    fontSize: '1rem',
+    color: '#94a3b8',
+    fontSize: '0.85rem',
+    fontFamily: 'monospace',
+    letterSpacing: '0.03em',
   },
-  container: {
+  authContainer: {
     minHeight: '100vh',
-    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    background: '#090d16',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     padding: '1rem',
+    fontFamily: 'system-ui, -apple-system, sans-serif',
     position: 'relative',
     overflow: 'hidden',
   },
   authCard: {
-    background: 'white',
-    borderRadius: '1rem',
-    padding: '2rem',
-    maxWidth: '450px',
     width: '100%',
-    boxShadow: '0 25px 50px rgba(0,0,0,0.15)',
-    zIndex: 10,
-    position: 'relative',
+    maxWidth: '400px',
+    background: 'rgba(15, 23, 42, 0.95)',
+    backdropFilter: 'blur(16px)',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    borderRadius: '1.25rem',
+    padding: '2.25rem 1.75rem',
+    boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5)',
   },
-  authHeader: {
-    textAlign: 'center',
-    marginBottom: '2rem',
+  brandHeaderContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: '3rem',
   },
-  authLogo: {
-    fontSize: '3rem',
-    marginBottom: '0.5rem',
+  brandRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '0.1rem',
+    marginBottom: '-1rem',
   },
-  authTitle: {
+  loginLogo: {
+    width: '80px',
+    height: '90px',
+    objectFit: 'contain',
+    borderRadius: '12px',
+    marginRight: '-25px',
+    marginLeft: '-30px',
+    filter: 'drop-shadow(0 0 16px rgba(56, 189, 248, 0.6))',
+  },
+  brandTitle: {
     fontSize: '1.8rem',
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: '0.25rem',
+    fontWeight: '900',
+    color: '#ffffff',
+    margin: 0,
+    padding: 0,
+    lineHeight: 1.2,
+    letterSpacing: '0.04em',
   },
-  authSubtitle: {
-    fontSize: '0.85rem',
-    color: '#666',
-  },
-  successMessage: {
-    background: '#d1fae5',
-    color: '#065f46',
-    padding: '0.75rem',
-    borderRadius: '0.5rem',
-    marginBottom: '1rem',
-    fontSize: '0.85rem',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-  },
-  errorMessage: {
-    background: '#fee2e2',
-    color: '#dc2626',
-    padding: '0.75rem',
-    borderRadius: '0.5rem',
-    marginBottom: '1rem',
-    fontSize: '0.85rem',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
+  brandSubtitle: {
+    fontSize: '0.8rem',
+    fontWeight: '500',
+    color: '#94a3b8',
+    margin: 0,
+    marginLeft: '5px',
+    padding: 0,
+    lineHeight: 0.50,
+    textAlign: 'center',
   },
   form: {
     display: 'flex',
     flexDirection: 'column',
     gap: '1rem',
   },
-  inputGroup: {
+  formGroup: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '0.25rem',
+    gap: '0.35rem',
+  },
+  passwordLabelRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   label: {
-    fontSize: '0.85rem',
-    fontWeight: '600',
-    color: '#333',
+    fontSize: '0.7rem',
+    fontWeight: '700',
+    color: '#cbd5e1',
+    letterSpacing: '0.04em',
   },
-  required: {
-    color: '#ef4444',
+  forgotBtn: {
+    background: 'none',
+    border: 'none',
+    color: '#38bdf8',
+    fontSize: '0.7rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+    padding: 0,
   },
   input: {
     width: '100%',
-    padding: '0.75rem',
-    border: '2px solid #e5e7eb',
-    borderRadius: '0.5rem',
-    fontSize: '0.9rem',
-    transition: 'all 0.3s ease',
+    padding: '0.75rem 0.85rem',
+    background: 'rgba(15, 23, 42, 0.9)',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    borderRadius: '0.75rem',
+    fontSize: '0.85rem',
+    color: '#ffffff',
     outline: 'none',
     boxSizing: 'border-box',
   },
-  passwordContainer: {
+  submitBtn: {
+    width: '100%',
+    padding: '0.8rem',
+    background: 'linear-gradient(135deg, #0284c7 0%, #38bdf8 100%)',
+    color: '#090d16',
+    border: 'none',
+    borderRadius: '0.75rem',
+    fontWeight: '800',
+    fontSize: '0.875rem',
+    letterSpacing: '0.04em',
+    marginTop: '0.5rem',
+    boxShadow: '0 4px 12px rgba(56, 189, 248, 0.25)',
+    transition: 'opacity 0.2s ease',
+  },
+  successAlert: {
+    padding: '0.65rem',
+    background: 'rgba(16, 185, 129, 0.15)',
+    border: '1px solid rgba(16, 185, 129, 0.3)',
+    borderRadius: '0.5rem',
+    color: '#34d399',
+    fontSize: '0.75rem',
+    textAlign: 'center',
+  },
+  toggleFooter: {
+    marginTop: '1.25rem',
+    textAlign: 'center',
+  },
+  toggleBtn: {
+    background: 'none',
+    border: 'none',
+    color: '#38bdf8',
+    fontSize: '0.75rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+    textDecoration: 'underline',
+  },
+
+  passwordInputWrapper: {
     position: 'relative',
+    display: 'flex',
+    alignItems: 'center',
     width: '100%',
   },
-  eyeButton: {
+  eyeToggleBtn: {
     position: 'absolute',
-    right: '12px',
+    right: '0.85rem',
     top: '50%',
     transform: 'translateY(-50%)',
-    background: 'transparent',
+    background: 'none',
     border: 'none',
     cursor: 'pointer',
-    padding: '0',
+    padding: 0,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    color: '#9ca3af',
-    transition: 'color 0.2s ease',
+    zIndex: 10,
   },
-  errorText: {
-    fontSize: '0.7rem',
-    color: '#ef4444',
-    marginTop: '0.25rem',
-  },
-  forgotPasswordContainer: {
-    textAlign: 'right',
-    marginTop: '-0.5rem',
-  },
-  forgotPasswordButton: {
-    background: 'none',
-    border: 'none',
-    color: '#667eea',
-    fontSize: '0.75rem',
-    cursor: 'pointer',
-    textDecoration: 'underline',
-  },
-  submitButton: {
-    width: '100%',
-    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-    color: 'white',
-    padding: '0.75rem',
-    border: 'none',
-    borderRadius: '0.5rem',
-    fontSize: '1rem',
-    fontWeight: '600',
-    transition: 'all 0.3s ease',
-    marginTop: '0.5rem',
-    cursor: 'pointer',
-  },
-  toggleContainer: {
-    textAlign: 'center',
-    marginTop: '0.5rem',
-  },
-  toggleButton: {
-    background: 'none',
-    border: 'none',
-    color: '#667eea',
-    fontSize: '0.85rem',
-    cursor: 'pointer',
-    textDecoration: 'underline',
-  },
-  footer: {
-    textAlign: 'center',
-    marginTop: '2rem',
-    paddingTop: '1rem',
-    borderTop: '1px solid #f0f0f0',
-    fontSize: '0.7rem',
-    color: '#999',
-  },
-  backgroundDecoration: {
-    position: 'absolute',
+
+  /* Sapa-Shield Dark Brand Bottom Sheet Modal */
+  modalOverlay: {
+    position: 'fixed',
     top: 0,
     left: 0,
+    width: '100vw',
+    height: '100vh',
+    background: 'rgba(9, 13, 22, 0.8)',
+    backdropFilter: 'blur(10px)',
+    display: 'flex',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    zIndex: 9999,
+  },
+  modalSheet: {
     width: '100%',
-    height: '100%',
-    overflow: 'hidden',
-    zIndex: 0,
+    maxWidth: '450px',
+    background: '#0f172a', // Sapa-Shield Navy Blue background
+    borderTop: '1px solid rgba(56, 189, 248, 0.3)',
+    borderLeft: '1px solid rgba(255, 255, 255, 0.08)',
+    borderRight: '1px solid rgba(255, 255, 255, 0.08)',
+    borderTopLeftRadius: '1.75rem',
+    borderTopRightRadius: '1.75rem',
+    padding: '1.25rem 1.75rem 2.25rem 1.75rem',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    textAlign: 'center',
+    boxShadow: '0 -15px 50px rgba(0, 0, 0, 0.8)',
+    animation: 'slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
+    boxSizing: 'border-box',
   },
-  sphere1: {
-    position: 'absolute',
-    width: '300px',
-    height: '300px',
-    background: 'radial-gradient(circle, rgba(102,126,234,0.3), transparent)',
-    borderRadius: '50%',
-    top: '-100px',
-    left: '-100px',
-    animation: 'float 20s infinite ease-in-out',
+  modalHandle: {
+    width: '42px',
+    height: '4px',
+    background: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: '9999px',
+    marginBottom: '1.25rem',
   },
-  sphere2: {
-    position: 'absolute',
-    width: '400px',
-    height: '400px',
-    background: 'radial-gradient(circle, rgba(118,75,162,0.3), transparent)',
+  dangerIconBadge: {
+    width: '52px',
+    height: '52px',
     borderRadius: '50%',
-    bottom: '-150px',
-    right: '-150px',
-    animation: 'float 20s infinite ease-in-out reverse',
+    background: 'rgba(244, 63, 94, 0.15)',
+    border: '2px solid #f43f5e',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: '1rem',
+    boxShadow: '0 0 20px rgba(244, 63, 94, 0.4)',
   },
-  sphere3: {
-    position: 'absolute',
-    width: '200px',
-    height: '200px',
-    background: 'radial-gradient(circle, rgba(240,147,251,0.2), transparent)',
-    borderRadius: '50%',
-    top: '50%',
-    left: '50%',
-    transform: 'translate(-50%, -50%)',
-    animation: 'float 15s infinite ease-in-out',
+  modalTitle: {
+    fontSize: '1.25rem',
+    fontWeight: '800',
+    color: '#ffffff',
+    margin: '0 0 0.5rem 0',
+    letterSpacing: '0.02em',
+  },
+  modalMessage: {
+    fontSize: '0.85rem',
+    color: '#94a3b8',
+    lineHeight: 1.4,
+    margin: '0 0 1.5rem 0',
+    maxWidth: '320px',
+  },
+  modalCloseBtn: {
+    width: '100%',
+    padding: '0.8rem',
+    background: 'linear-gradient(135deg, #0284c7 0%, #38bdf8 100%)', // Brand Gradient
+    color: '#090d16',
+    border: 'none',
+    borderRadius: '0.75rem',
+    fontSize: '0.875rem',
+    fontWeight: '800',
+    letterSpacing: '0.04em',
+    cursor: 'pointer',
+    boxShadow: '0 4px 14px rgba(56, 189, 248, 0.3)',
   },
 };
-
-if (typeof document !== 'undefined') {
-  const style = document.createElement('style');
-  style.textContent = `
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.7; transform: scale(1.05); }
-    }
-    @keyframes float {
-      0%, 100% { transform: translate(0, 0) scale(1); }
-      33% { transform: translate(20px, -20px) scale(1.1); }
-      66% { transform: translate(-20px, 20px) scale(0.9); }
-    }
-    input:focus {
-      border-color: #667eea !important;
-      box-shadow: 0 0 0 3px rgba(102,126,234,0.1) !important;
-    }
-    button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(102,126,234,0.3);
-    }
-    .eye-button:hover {
-      color: #667eea !important;
-    }
-  `;
-  document.head.appendChild(style);
-}
